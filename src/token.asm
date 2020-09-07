@@ -417,6 +417,8 @@ HASH:		fsm	't', INIT, TOK_TRUE, 0
 
 zero_num:	ld	bc, 0
 		ld	(numeric), bc
+		ld	a, '+'
+		ld	(sign), a
 		ret
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -455,11 +457,12 @@ COMMENT:	fsm	10, INIT, 0, 0
 BASE2::		fsm	0, BASE2, 0, parse
 parse:		call	is_delimiter
 		jr	z, number_done
+		cp	'_'
+		ret	z
 		cp	'0'
 		jr	z, digit
 		cp	'1'
-		jr	z, digit
-		jp	token_err
+		jp	nz, token_err
 digit:		sub	'0'
 		ld	hl, (numeric)
 		add	hl, hl
@@ -468,9 +471,55 @@ digit:		sub	'0'
 		ld	l, a
 		ld	(numeric), hl
 		ret
-
 #endlocal
 
+#local
+BASE10::	fsm	0, BASE10, 0, parse
+parse:		call	is_delimiter
+		jr	z, base10_done
+		cp	'_'
+		ret	z
+		cp	'0'
+		jp	c, token_err
+		cp	'9'+1
+		jp	nc, token_err
+digit:		sub	'0'
+		ld	hl, (numeric)
+		add	hl, hl			; hl = hl * 2
+		jr	c, overflow
+		ld	bc, hl
+		add	hl, hl			; hl = hl * 4
+		jr	c, overflow
+		add	hl, hl			; hl = hl * 8
+		jr	c, overflow
+		add	hl, bc			; hl = hl * 10
+		jr	c, overflow
+		ld	c, a
+		ld	b, 0
+		add	hl, bc			; hl = hl * 10 + input
+		jr	c, overflow
+		ld	(numeric), hl
+		ret
+
+base10_done:	ld	a, (sign)		; check the sign flag
+		and	$80			; also clears carry flag for 16-bit sbc
+		ld	b, a			; save the sign flag
+		jr	z, check_sign		; positive number: don't negate it
+		ld	hl, 0
+		ld	de, (numeric)
+		sbc	hl, de
+		ld	(numeric), hl
+
+		; for a positive number the sign bit should not be set
+		; for a negative number it should be
+check_sign:	ld	a, (numeric+1)
+		and	$80
+		xor	b
+		jr	nz, overflow		; if the sign bits differ the number overflowed
+		jr	number_done
+#endlocal
+
+; Pop these between BASE10 and BASE16 to be reachable from BASE2, BASE10, and BASE16
 overflow:	ld	a, ERR_OVERFLOW
 		pop	hl
 		ret
@@ -481,8 +530,43 @@ number_done:	ld	hl, INIT
 		ld	a, TOK_NUMBER
 		jp	go_output
 
-BASE10:		fsm	0, DONE, ERR_INTERNAL, 0
-BASE16:		fsm	0, DONE, ERR_INTERNAL, 0
+#local
+BASE16::	fsm	0, BASE16, 0, parse
+parse:		call	is_delimiter
+		jr	z, number_done
+		cp	'_'
+		ret	z
+		cp	'0'
+		jp	c, token_err		; < '0' is an error
+		cp	'9'+1
+		jr	c, digit		; '0' < a < '9'+1 is a decimal digit
+		cp	'a'
+		jr	c, char			; < 'a' should be lower case
+		sub	'a' - 'A'		; convert to lower case
+char:		cp	'A'
+		jp	c, token_err		; < 'A' is an error
+		cp	'F'+1
+		jp	nc, token_err		; > 'F' is an error
+		sub	'A' - '9' - 1		; convert to 0-9 scale
+digit:		sub	'0'
+		ld	hl, (numeric)
+		add	hl, hl			; hl=hl*2
+		jr	c, overflow
+		add	hl, hl			; hl=hl*4
+		jr	c, overflow
+		add	hl, hl			; hl=hl*8
+		jr	c, overflow
+		add	hl, hl			; hl=hl*16
+		jr	c, overflow
+		add	l
+		ld	l, a
+		ld	(numeric), hl
+		ret
+
+digits:		.text	'0123456789ABCDEF'
+
+#endlocal
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; IDENT state
