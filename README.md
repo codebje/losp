@@ -10,3 +10,4 @@ Programming the TRS-20 in assembly gets old fairly fast. This project is the ine
   - 16-bit signed integer math, no floating point, no fixed point, no bigint
   - Separate lexer and parser - probably a bit bigger and a bit slower, but a lot more maintainable
   - Add _ in numbers for spacing to Scheme's syntax
+

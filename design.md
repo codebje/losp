@@ -174,20 +174,30 @@ scheme:
 
     disjoint types: boolean? pair? symbol? number? char? string? vector? port? procedure?
 
-
 plan:
+    pair: 32 bits, two 14 bit pointers; car bit 15 is for GC marking. car bit 14 indicates if cdr is a pointer or a
+    16-bit number. cdr bit 14 indicates if car is a character/byte in bits 7-0 or a pointer.
+
+    	0 _ 0	regular pair	both halves are pointers to other pairs
+	0 _ 1	character data	car 7-0 contains an ascii byte, cdr is a pointer as usual
+	1 x x	16-bit number	cdr half contains a 16-bit signed numeric value, not a pointer
+
+    potential exists to use cdr bit 15 to further differentiate
+
+    strings, symbols are lists of characters. easy over efficient. characters and 8-bit unsigned data are identical.
+
+    procedures are expected to be a list whose car is a list of variable names to be bound and whose cdr is a list of
+    expressions to evaluate: `lambda` is equivalent to `quote`
+
+    Atom pointers could be a relative index into the atom space. The atom space is at most 16kb in size due to the use
+    of 14-bit pointers. The initial atom space is 16kb - not sure yet how to allow a program to shrink this. Runtime
+    shrinking requires that atoms aren't in the space to be shrunk. Using the MMU might work: it could potentially be
+    a lot of remapping, but just writing the BBR is pretty fast - a full 64k of program data in 0x10000 - 0x1ffff with
+    any space below BDOS and above the interpreter available for atoms, less a 4k window into the program data.
+
+    Environments are pairs of (name, data) in a linked list, eg
+    	( (NIL NIL) (ten 10) (lambda <intrinsic>) )
+
     allocator - no GC - init. a memory space to cons cells linked to each other as free list
     symbols ?
     reader - tokenise by FSM
-
-    token = <ident> | <bool> | <number> | <character> | <string> | ( | ) | #( | ' | ` | , | ,@ | .
-
-    ident = <initial> <subsequent*> | <peculiar>
-    initial = <letter> | <special initial>
-    special initial = ! | $ | % | & | * | / | : | < | = | > | ? | ^ | _ | ~
-    subsequent = <initial> | <digit> | <special subsequent>
-    special subsequent = + | - | . | @
-    peculiar = + | - | ...
-
-    SPECial characters to start an ident. are [!$%&*/:<=>?^_~]
-    SUBSequent characters in an ident. are SPEC with [+-.@]
