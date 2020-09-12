@@ -167,7 +167,7 @@ INIT::		fsm	9, INIT, 0, 0			; tab - ignore
 		fsm	'[', DONE, ERR_UNEXPECTED, 0
 		fsm	'\', DONE, ERR_UNEXPECTED, 0
 		fsm	']', DONE, ERR_UNEXPECTED, 0
-		fsm	'{', DONE, ERR_UNEXPECTED, 0
+		fsm	$7b, DONE, ERR_UNEXPECTED, 0	; {
 		fsm	'|', DONE, ERR_UNEXPECTED, 0
 		fsm	'}', DONE, ERR_UNEXPECTED, 0
 		fsm	0, INIT, 0, token		; anything else - digit or ident
@@ -607,7 +607,7 @@ IDENT:		; <delimiter> terminates the identifier
 		fsm	'\', DONE, ERR_UNEXPECTED, 0
 		fsm	'`', DONE, ERR_UNEXPECTED, 0
 		fsm	']', DONE, ERR_UNEXPECTED, 0
-		fsm	'{', DONE, ERR_UNEXPECTED, 0
+		fsm	$7B, DONE, ERR_UNEXPECTED, 0	; {
 		fsm	'}', DONE, ERR_UNEXPECTED, 0
 		; the comparisons are easier done by range checks now
 		; anything left between '!' and '~' is a valid input
