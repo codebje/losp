@@ -15,7 +15,35 @@ program:	equ	$
 
 		ld	sp, (6)
 test:		call	alloc_init
-		halt
+		ld	bc, $8038
+loop:		call	allocate
+		call	print_state
+		djnz	loop
+		dec	c
+		jr	nz, loop
+		jp	0
+
+state_msg:	.text	'BC='
+state_bc:	.text	'????, allocated='
+state_hl:	.text	'????',13,10,'$'
+print_state:	ld	a, b
+		call	bin_to_hex
+		ld	(state_bc), de
+		ld	a, c
+		call	bin_to_hex
+		ld	(state_bc+2), de
+		ld	a, h
+		call	bin_to_hex
+		ld	(state_hl), de
+		ld	a, l
+		call	bin_to_hex
+		ld	(state_hl+2), de
+		push	bc
+		ld	de, state_msg
+		ld	c, 9
+		call	5
+		pop	bc
+		ret
 
 main:		ld	ix, input
 		ld	iy, output
@@ -48,6 +76,40 @@ output:		cp	TOK_EOF+1
 err:		ld	de, parse_error
 		ld	c, 9
 		jp	5			; return from here to the tokeniser
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; bin_to_hex - convert an 8-bit binary value to hex digits
+;;
+;; https://stackoverflow.com/questions/22838444/convert-an-8bit-number-to-hex-in-z80-assembler
+;;
+;; in:		a	value
+;; out:		de	hex digits
+#local
+bin_to_hex::	push	af
+		push	bc
+		ld	c, a
+		call	shift
+		ld	e, a
+		ld	a, c
+		call	convert
+		ld	d, a
+		pop	bc
+		pop	af
+		ret
+
+shift:		rra		; shift higher nibble to lower
+		rra
+		rra
+		rra
+convert:	or	a, $f0
+		daa		; I've no idea if this will work on a Z180...
+		add	a, $a0
+		adc	a, $40
+		ret
+#endlocal
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; variables
 
 ptr:		dw	src
 src:		.text	'(print "hello world")', $1a

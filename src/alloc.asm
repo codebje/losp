@@ -47,7 +47,6 @@ free_list:	.dw	program
 #local
 alloc_init::
 		ld	de, program			; the start of program space
-		ld	(free_list), de			; reset the free list
 		ld	hl, (6)
 		or	a				; clear carry flag
 		sbc	hl, de				; hl = count of bytes to fill
@@ -57,7 +56,9 @@ alloc_init::
 		rr	l
 		ld	b, l
 		ld	c, h				; this will leave 1kb for a stack
-		ld	hl, program>>2 + 1
+		ld	hl, program>>2
+		ld	(free_list), hl			; reset the free list
+		inc	hl
 		ld	ix, program+4
 		ld	de, 4
 
@@ -83,5 +84,49 @@ loop:		ld	(ix+0), a
 		ld	(ix-1), a
 
 		ret
+#endlocal
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; allocate	allocate a new pair
+;;
+;; `allocate` will allocate a new pair from the free list. If there are no more
+;; free pairs to allocate, `allocate` will print an error message and terminate
+;; the program.
+;;
+;; The contents of the pair will be cleared to zero.
+;;
+;; out:		hl	the allocated pair
+;;
+#local
+allocate::
+		push	af
+		push	de
+		push	ix
+		ld	hl, (free_list)
+		add	hl, hl
+		add	hl, hl
+		ld	a, h
+		or	l
+		jr	z, oom
+		push	hl
+		pop	ix
+		ld	d, (ix+3)
+		ld	e, (ix+2)
+		ld	(free_list), de
+		xor	a
+		ld	(ix+0), a
+		ld	(ix+1), a
+		ld	(ix+2), a
+		ld	(ix+3), a
+		pop	ix
+		pop	de
+		pop	af
+		ret
+
+oom:		ld	de, oom_msg
+		ld	c, 9
+		call	5
+		jp	0
+
+oom_msg:	.text	'ENOMEM',13,10,'$'
 #endlocal
