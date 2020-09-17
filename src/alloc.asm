@@ -93,33 +93,34 @@ loop:		ld	(ix+0), a
 ;; free pairs to allocate, `allocate` will print an error message and terminate
 ;; the program.
 ;;
-;; The contents of the pair will be cleared to zero.
+;; The contents of the pair will be set to ( bc . de )
 ;;
-;; out:		hl	the allocated pair
+;; in:		bc	car of the new pair
+;;		de	cdr of the new pair
+;; out:		hl	the allocated pair, as a 14-bit pointer
 ;;
 #local
 allocate::
 		push	af
-		push	de
 		push	ix
+		push	de
 		ld	hl, (free_list)
-		add	hl, hl
-		add	hl, hl
 		ld	a, h
 		or	l
 		jr	z, oom
-		push	hl
+		push	hl			; move the cell address to ix
 		pop	ix
-		ld	d, (ix+3)
+		add	ix, ix			; convert to a 16-bit pointer
+		add	ix, ix
+		ld	d, (ix+3)		; get the next free cell address
 		ld	e, (ix+2)
 		ld	(free_list), de
-		xor	a
-		ld	(ix+0), a
-		ld	(ix+1), a
-		ld	(ix+2), a
-		ld	(ix+3), a
+		pop	de			; restore de to be saved in the new pair
+		ld	(ix+0), c
+		ld	(ix+1), b
+		ld	(ix+2), e
+		ld	(ix+3), d
 		pop	ix
-		pop	de
 		pop	af
 		ret
 

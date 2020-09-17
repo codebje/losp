@@ -395,7 +395,7 @@ str_append_cr:	ld	a, 13
 ;; <boolean>		= #t | #f
 ;; <character>		= #\<character>
 ;;			| #\<character name>	NOT IMPLEMENTED
-;;			| #\x<hex>		NOT IMPLEMENTED
+;;			| #\x<hex>
 ;; <character name>	= alarm | backspace | delete | escape | newline
 ;;			| null | return | space | tab
 ;; <vector>		= #(			NOT IMPLEMENTED
@@ -426,18 +426,50 @@ zero_num:	ld	bc, 0
 ;;
 ;; <character>		= #\<character>
 ;;			| #\<character name>	NOT IMPLEMENTED
-;;			| #\x<hex>		NOT IMPLEMENTED
+;;			| #\x<hex>
 ;; <character name>	= alarm | backspace | delete | escape | newline
 ;;			| null | return | space | tab
 ;;
-;; A full implementation needs to peek ahead on x, a, b, e, n, r, s, t.
+;; To test for #\<character name> and #\x<hex>, peek ahead on x, a, b, d, e, n, r, s, t.
+;; All other characters are taken literally.
 ;;
-CHAR_ESCAPE:	fsm	$1A, DONE, ERR_UNEXPECTED, 0	; can't EOF here
-		fsm	0, INIT, 0, character		; _everything else_ literally as-is
+;; #\x<hex> expects exactly two hex digits.
+;;
+#local
+CHAR_ESCAPE::	fsm	$1A, DONE, ERR_UNEXPECTED, 0	; can't EOF here
+		fsm	'x', INIT, 0, char_x		; either #\x or #\x<HEX>
+		;fsm	'a', CHAR_A, 0, 0		; either #\a or #\alarm
+		;fsm	'b', CHAR_B, 0, 0		; either #\b or #\backspace
+		;fsm	'd', CHAR_D, 0, 0		; either #\d or #\delete
+		;fsm	'e', CHAR_E, 0, 0		; either #\e or #\escape
+		;fsm	'n', CHAR_N, 0, 0		; either #\n, #\null, or #\newline
+		;fsm	'r', CHAR_R, 0, 0		; either #\r or #\return
+		;fsm	's', CHAR_S, 0, 0		; either #\s or #\space
+		;fsm	't', CHAR_T, 0, 0		; either #\t or #\tab
+		fsm	0, INIT, 0, literal		; everything else taken literally
 
-character:	ld	l, a
+char_x:		call	peek_input			; look ahead to see if it's a hex digit
+		call	match_hex
+		jr	nc, literal_x			; anything other than hex means literal #\x
+		rlca					; multiply by 16
+		rlca
+		rlca
+		rlca
+		ld	(numeric),a			; save the value
+		call	get_input			; consume the character
+		call	get_input			; and get the next
+		call	match_hex
+		jp	nc, token_err			; not hex? not good
+		ld	l, a
+		ld	a, (numeric)
+		or	l
+		jr	literal				; that value's the literal character
+
+literal_x:	ld	a, 'x'
+literal:	ld	l, a
 		ld	a, TOK_CHARACTER
 		jp	go_output			; let go_output ret for me
+#endlocal
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; COMMENT state
@@ -536,19 +568,8 @@ parse:		call	is_delimiter
 		jr	z, number_done
 		cp	'_'
 		ret	z
-		cp	'0'
-		jp	c, token_err		; < '0' is an error
-		cp	'9'+1
-		jr	c, digit		; '0' < a < '9'+1 is a decimal digit
-		cp	'a'
-		jr	c, char			; < 'a' should be lower case
-		sub	'a' - 'A'		; convert to lower case
-char:		cp	'A'
-		jp	c, token_err		; < 'A' is an error
-		cp	'F'+1
-		jp	nc, token_err		; > 'F' is an error
-		sub	'A' - '9' - 1		; convert to 0-9 scale
-digit:		sub	'0'
+		call	match_hex
+		jp	nc, token_err		; hex or error
 		ld	hl, (numeric)
 		add	hl, hl			; hl=hl*2
 		jr	c, overflow
@@ -624,6 +645,38 @@ ident_done:	ld	hl, string
 		ld	a, TOK_IDENTIFIER
 		call	go_output
 		ret
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; match_hex tests if a character is a hex digit
+;;
+;; in:		a	the character to test
+;; out:		a	the hex value if a hex digit, else unchanged
+;;		cf	set if the character is a hex digit
+;;
+#local
+match_hex::	cp	'0'
+		jr	c, not_hex
+		cp	'9'+1
+		jr	c, convert_base10
+		cp	'A'
+		jr	c, not_hex
+		cp	'F'+1
+		jr	c, convert_alpha
+		cp	'a'
+		jr	c, not_hex
+		cp	'f'+1
+		ret	nc
+		sub	'a' - 'A'		; convert to upper case
+convert_alpha:	sub	'A' - 10
+		scf
+		ret
+convert_base10: sub	'0'
+		scf
+		ret
+
+not_hex:	or	a
+		ret
+#endlocal
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; peek_input looks at the next available input character without consuming it.

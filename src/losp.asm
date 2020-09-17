@@ -14,6 +14,7 @@ program:	equ	$
 		org	$100
 
 		ld	sp, (6)
+		jp	main
 test:		call	alloc_init
 		ld	bc, $8038
 loop:		call	allocate
@@ -48,7 +49,12 @@ print_state:	ld	a, b
 main:		ld	ix, input
 		ld	iy, output
 		call	tokenise
-		halt
+		cp	TOK_EOF
+		jr	z, done
+		ld	de, parse_error
+		ld	c, 9
+		call	5
+done:		halt
 
 input:		ld	hl, (ptr)
 		ld	a, (hl)
@@ -112,8 +118,8 @@ convert:	or	a, $f0
 ;; variables
 
 ptr:		dw	src
-src:		.text	'(print "hello world")', $1a
-parse_error:	.text	'parse error', 13, 10, $1a
+src:		.text	'(print #\a #\x7a "hello world")', $1a
+parse_error:	.text	'parse error', 13, 10, '$'
 
 jumps:		.dw	p_ident
 		.dw	p_true
@@ -161,9 +167,12 @@ msg:		.text	'number',13,10,'$'
 
 #local
 p_char::	ld	de, msg
+		ld	a, c
+		ld	(val), a
 		ld	c, 9
 		jp	5
-msg:		.text	'char',13,10,'$'
+msg:		.text	'char: '
+val:		.text	'?',13,10,'$'
 #endlocal
 
 #local
@@ -238,3 +247,5 @@ msg:		.text	'EOF',13,10,'$'
 
 #include	"alloc.asm"
 #include	"token.asm"
+#include	"symbols.asm"
+

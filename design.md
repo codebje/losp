@@ -178,13 +178,12 @@ plan:
     pair: 32 bits, two 14 bit pointers; car bit 15 is for GC marking. car bit 14 indicates if cdr is a pointer or a
     16-bit number. cdr bit 14 indicates if car is a character/byte in bits 7-0 or a pointer.
 
-    	0 _ 0	regular pair	both halves are pointers to other pairs
-	0 _ 1	character data	car 7-0 contains an ascii byte, cdr is a pointer as usual
+    	0 x 0	regular pair	both halves are pointers to other pairs
+	0 x 1	character data	car 7-0 contains an ascii byte, cdr is a pointer as usual
 	1 x x	16-bit number	cdr half contains a 16-bit signed numeric value, not a pointer
 
-    potential exists to use cdr bit 15 to further differentiate
-
     strings, symbols are lists of characters. easy over efficient. characters and 8-bit unsigned data are identical.
+    symbols are interned, strings are not.
 
     procedures are expected to be a list whose car is a list of variable names to be bound and whose cdr is a list of
     expressions to evaluate: `lambda` is equivalent to `quote`
@@ -201,3 +200,29 @@ plan:
     allocator - no GC - init. a memory space to cons cells linked to each other as free list
     symbols ?
     reader - tokenise by FSM
+    parse s-expressions spat out by tokeniser into a list - allocate a new pair, begin tokenisation, rec. desc. parser
+
+	identifier	-> intern, car=pointer to symbol
+	true/false	-> car=pointer to fixed #t/#f symbol (is #f same as nil?)
+	number		-> car=pointer to number object
+	character	-> car=8-bit data
+	string		-> car=pointer to list of characters
+	lparen		-> car=pointer to recursive parse result
+	rparen		-> cdr=0, pop list tail stack
+	hparen		-> error, nyi
+	quote		-> error, nyi
+	backquote	-> error, nyi
+	comma		-> error, nyi
+	comma-at	-> error, nyi
+	period		-> next value should go in cdr and be followed by rparen/eof
+	eof		-> cdr=0, expect list tail stack to be empty
+
+    lexical scope means the values bound to symbols form a tree: the root of the tree is the default environment,
+    each nested scope is a branch of the tree: entering a new scope level creates a new node, car points to an
+    environment, cdr points to the parent scope; a closure holds onto a reference to its scope to prevent GC.
+
+testing?
+
+    the functions in token.asm and alloc.asm really should get automated testing applied - vTRS-20 can execute code, so
+    it only remains to figure out a suitable test harness. on the back burner for now...
+
